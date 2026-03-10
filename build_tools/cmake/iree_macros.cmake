@@ -78,6 +78,8 @@ elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "riscv64")
   set(IREE_ARCH "riscv_64")
 elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "riscv32")
   set(IREE_ARCH "riscv_32")
+elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "ppc64le")
+  set(IREE_ARCH "ppc64le")
 elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "")
   set(IREE_ARCH "")
   message(WARNING "Performance advisory: architecture-specific code paths "

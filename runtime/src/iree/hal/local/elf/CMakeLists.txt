@@ -65,6 +65,7 @@ iree_cc_library(
     "arch/riscv.c"
     "arch/x86_32.c"
     "arch/x86_64.c"
+    "arch/ppc_64.c"
     "elf_types.h"
   DEPS
     iree::base

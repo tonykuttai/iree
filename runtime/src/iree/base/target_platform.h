@@ -71,6 +71,7 @@ enum iree_arch_enum_e {
   IREE_ARCH_ENUM_WASM_64,
   IREE_ARCH_ENUM_X86_32,
   IREE_ARCH_ENUM_X86_64,
+  IREE_ARCH_ENUM_PPC_64,
 };
 
 #if defined(__arm64) || defined(__aarch64__) || defined(_M_ARM64) || \
@@ -117,10 +118,20 @@ enum iree_arch_enum_e {
 #define IREE_ARCH_X86_64 1
 #endif  // X86
 
+#if defined(__PPC64__) || defined(__ppc64__) || defined(_ARCH_PPC64)
+#define IREE_ARCH "ppc_64"
+#define IREE_ARCH_ENUM IREE_ARCH_ENUM_PPC_64
+#define IREE_ARCH_PPC_64 1
+#if defined(__LITTLE_ENDIAN__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define IREE_ARCH_LITTLE_ENDIAN 1
+#endif
+#endif  // PPC
+
 #if !defined(IREE_ARCH_ARM_32) && !defined(IREE_ARCH_ARM_64) &&     \
     !defined(IREE_ARCH_RISCV_32) && !defined(IREE_ARCH_RISCV_64) && \
     !defined(IREE_ARCH_WASM_32) && !defined(IREE_ARCH_WASM_64) &&   \
-    !defined(IREE_ARCH_X86_32) && !defined(IREE_ARCH_X86_64)
+    !defined(IREE_ARCH_X86_32) && !defined(IREE_ARCH_X86_64) &&     \
+    !(defined(IREE_ARCH_PPC_64) && defined(IREE_ARCH_LITTLE_ENDIAN))
 #error Unknown architecture.
 #endif  // all archs
 

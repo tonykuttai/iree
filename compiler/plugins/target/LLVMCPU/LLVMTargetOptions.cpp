@@ -442,6 +442,7 @@ static void initializeLLVMTargets() {
 // to the build file or you will get undefined symbol errors at link time.
 #define LLVM_INITIALIZE_TARGET_AArch64() LLVM_INITIALIZE_GENERIC(AArch64)
 #define LLVM_INITIALIZE_TARGET_ARM() LLVM_INITIALIZE_GENERIC(ARM)
+#define LLVM_INITIALIZE_TARGET_PowerPC() LLVM_INITIALIZE_GENERIC(PowerPC)
 #define LLVM_INITIALIZE_TARGET_RISCV() LLVM_INITIALIZE_GENERIC(RISCV)
 #define LLVM_INITIALIZE_TARGET_X86() LLVM_INITIALIZE_GENERIC(X86)
 #define LLVM_INITIALIZE_TARGET_WebAssembly()                                   \
@@ -459,7 +460,6 @@ static void initializeLLVMTargets() {
 #define LLVM_INITIALIZE_TARGET_Mips()
 #define LLVM_INITIALIZE_TARGET_MSP430()
 #define LLVM_INITIALIZE_TARGET_NVPTX()
-#define LLVM_INITIALIZE_TARGET_PowerPC()
 #define LLVM_INITIALIZE_TARGET_Sparc()
 #define LLVM_INITIALIZE_TARGET_SystemZ()
 #define LLVM_INITIALIZE_TARGET_VE()

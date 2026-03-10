@@ -111,6 +111,12 @@ resolveCPUFeaturesForCPU(const llvm::Triple &triple, std::string &cpu,
     for (const auto &feature : features) {
       targetCpuFeatures.AddFeature(feature);
     }
+  } else if (triple.isPPC64()) {
+    // For PowerPC, we accept the CPU name and let LLVM handle feature resolution.
+    // Common PowerPC CPUs: pwr7, pwr8, pwr9, pwr10, etc.
+    // For now, we don't validate the CPU name and let LLVM's target machine
+    // creation handle it. If needed, validation can be added later.
+    // PowerPC features are typically handled by the CPU selection itself.
   } else {
     return ResolveCPUAndCPUFeaturesStatus::UnimplementedMapping;
   }

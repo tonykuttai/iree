@@ -237,12 +237,16 @@ static inline bool iree_uk_all_bits_set(const iree_uk_uint64_t val,
 #define IREE_UK_ARCH_X86_64 1
 #endif  // X86
 
+#if defined(__PPC64__) || defined(__ppc64__) || defined(_ARCH_PPC64)
+#define IREE_UK_ARCH_PPC_64 1
+#endif  // PPC
+
 //===----------------------------------------------------------------------===//
 // Architecture bitness
 //===----------------------------------------------------------------------===//
 
 #if defined(IREE_UK_ARCH_ARM_64) || defined(IREE_UK_ARCH_RISCV_64) || \
-    defined(IREE_UK_ARCH_WASM_64) || defined(IREE_UK_ARCH_X86_64)
+    defined(IREE_UK_ARCH_WASM_64) || defined(IREE_UK_ARCH_X86_64) || defined(IREE_UK_ARCH_PPC_64)
 #define IREE_UK_ARCH_IS_64_BIT
 #elif defined(IREE_UK_ARCH_ARM_32) || defined(IREE_UK_ARCH_RISCV_32) || \
     defined(IREE_UK_ARCH_WASM_32) || defined(IREE_UK_ARCH_X86_32)

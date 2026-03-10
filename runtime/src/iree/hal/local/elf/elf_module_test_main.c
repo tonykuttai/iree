@@ -30,6 +30,8 @@ static iree_status_t query_arch_test_file_data(
   pattern = iree_make_cstring_view("*_x86_32.so");
 #elif defined(IREE_ARCH_X86_64)
   pattern = iree_make_cstring_view("*_x86_64.so");
+#elif defined(IREE_ARCH_PPC_64)
+  pattern = iree_make_cstring_view("*_ppc_64.so");
 #else
 #warning "No architecture pattern specified; ELF linker will not be tested"
 #endif  // IREE_ARCH_*

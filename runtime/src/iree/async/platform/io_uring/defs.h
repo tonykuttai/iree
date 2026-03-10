@@ -37,7 +37,8 @@ extern "C" {
 // schemes — add them explicitly after verifying.
 #if defined(IREE_ARCH_X86_32) || defined(IREE_ARCH_X86_64) || \
     defined(IREE_ARCH_ARM_32) || defined(IREE_ARCH_ARM_64) || \
-    defined(IREE_ARCH_RISCV_32) || defined(IREE_ARCH_RISCV_64)
+    defined(IREE_ARCH_RISCV_32) || defined(IREE_ARCH_RISCV_64) || \
+    defined(IREE_ARCH_PPC_64)
 #define IREE_IO_URING_SYSCALL_SETUP 425
 #define IREE_IO_URING_SYSCALL_ENTER 426
 #define IREE_IO_URING_SYSCALL_REGISTER 427
