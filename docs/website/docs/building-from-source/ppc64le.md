@@ -145,15 +145,20 @@ on ppc64le can be tagged with the `noppc64le` label to exclude them.
   platform macro (`runtime/src/iree/base/target_platform.h`, little-endian
   only), and a little-endian ELF loader/relocator
   (`runtime/src/iree/hal/local/elf/arch/ppc_64.c`).
-* **No hand-written `mmt4d` microkernel exists yet** for ppc64
-  (`runtime/src/iree/builtins/ukernel/arch/` has `x86_64`, `arm_64`, and
-  `riscv_64` but no `ppc64`) — matmul performance currently relies on generic
-  vectorized codegen, not a tuned microkernel. Adding a `ppc64/` ukernel using
-  the Power10 MMA builtins (`__builtin_mma_*`) is the natural next step for
-  matching hand-optimized BLAS performance.
-  * **Power10 MMA acceleration itself is not implemented.** There is no
-  `ppc_mma` MLIR dialect or vector-to-MMA lowering — codegen for Power8/9/10
-  today is generic PowerPC vector codegen.
+* **A hand-written `mmt4d` microkernel exists for Power10 MMA**
+  (`runtime/src/iree/builtins/ukernel/arch/ppc_64/`), using
+  `__builtin_mma_xvf32gerpp` et al. (`<altivec.h>`) for `f32f32f32`, with a
+  fixed M0=4, N0=4, K0=1 tile matching the instruction's fixed 4x4
+  outer-product width. Validated against the generic reference
+  implementation on real POWER10 hardware (`mmt4d_test`), including the
+  accumulate path. Note `__builtin_mma_assemble_acc`'s operand order is
+  reversed relative to `__builtin_mma_disassemble_acc`'s output order — easy
+  to get backwards, and the cause of a real bug caught during validation.
+  Power8/Power9 (no MMA) and all other dtypes (int8, bf16, f16) still fall
+  back to generic vectorized codegen, not a tuned microkernel — extending
+  tile coverage is the natural next step. There is still no `ppc_mma` MLIR
+  dialect or vector-to-MMA lowering at the compiler IR level; this ukernel is
+  the only path to MMA acceleration today.
 * **Validated on real POWER10 Linux hardware** (not just QEMU): a full-pipeline
   `iree-compile`/`iree-run-module` round trip for `linalg.matmul` produces
   numerically correct results, both with `--iree-llvmcpu-target-cpu=host` and
