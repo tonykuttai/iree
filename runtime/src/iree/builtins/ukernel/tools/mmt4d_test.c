@@ -616,6 +616,9 @@ int main(int argc, char** argv) {
                          IREE_UK_FLAG_MMT4D_TYPE_F16F16F16,
                      7, 16, 1, "zvfh");
 
+#elif defined(IREE_ARCH_PPC_64)
+  iree_uk_test_mmt4d(IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 4, 1, "mma");
+
 #endif  // defined(IREE_ARCH_ARM_64)
 
   return iree_uk_test_exit_status();

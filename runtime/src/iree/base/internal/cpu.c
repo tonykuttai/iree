@@ -438,6 +438,34 @@ static void iree_cpu_initialize_from_platform_riscv_64(uint64_t* out_fields) {
 }
 
 #endif  // IREE_PLATFORM_*
+
+#elif defined(IREE_ARCH_PPC_64)
+#if defined(IREE_PLATFORM_LINUX)
+
+// As with ARM/RISC-V, ISA feature bits are not directly accessible to
+// userspace; rely on the kernel-exposed HWCAP2 bits.
+// See: https://docs.kernel.org/arch/powerpc/elf_hwcaps.html
+#include <sys/auxv.h>
+
+// Locally defined for the same reason as the ARM/RISC-V cases above: not all
+// libc/kernel header versions define these.
+#define IREE_PPC_FEATURE2_MMA (1 << 17)  // PPC_FEATURE2_MMA
+
+static void iree_cpu_initialize_from_platform_ppc_64(uint64_t* out_fields) {
+  unsigned long hwcap2 = getauxval(AT_HWCAP2);
+  uint64_t out0 = 0;
+  IREE_COPY_BITS(out0, IREE_CPU_DATA0_PPC_64_MMA, hwcap2,
+                 IREE_PPC_FEATURE2_MMA);
+  out_fields[0] = out0;
+}
+
+#else
+
+static void iree_cpu_initialize_from_platform_ppc_64(uint64_t* out_fields) {
+  // No implementation available. CPU data will be all zeros.
+}
+
+#endif  // IREE_PLATFORM_*
 #endif  // defined(IREE_ARCH_ARM_64)
 
 static void iree_cpu_initialize_from_platform(iree_allocator_t temp_allocator,
@@ -448,6 +476,8 @@ static void iree_cpu_initialize_from_platform(iree_allocator_t temp_allocator,
   iree_cpu_initialize_from_platform_x86_64(out_fields);
 #elif defined(IREE_ARCH_RISCV_64)
   iree_cpu_initialize_from_platform_riscv_64(out_fields);
+#elif defined(IREE_ARCH_PPC_64)
+  iree_cpu_initialize_from_platform_ppc_64(out_fields);
 #else
   // No implementation available. CPU data will be all zeros.
 #endif  // defined(IREE_ARCH_ARM_64)

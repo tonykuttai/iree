@@ -125,3 +125,12 @@ IREE_CPU_FEATURE_BIT(X86_64, 0, 52, AMXBF16, "amx-bf16")
 IREE_CPU_FEATURE_BIT(RISCV_64, 0, 0, V, "v")
 IREE_CPU_FEATURE_BIT(RISCV_64, 0, 1, ZVFHMIN, "zvfhmin")
 IREE_CPU_FEATURE_BIT(RISCV_64, 0, 2, ZVFH, "zvfh")
+
+//===----------------------------------------------------------------------===//
+// IREE_ARCH_PPC_64 / ppc64 (little-endian only, see IREE_ARCH_LITTLE_ENDIAN)
+//===----------------------------------------------------------------------===//
+
+// Power10 (ISA 3.1) Matrix-Multiply Assist: 512-bit accumulators and the
+// outer-product instruction family (xvf32gerpp et al). Detected at runtime
+// via the Linux PPC_FEATURE2_MMA bit in AT_HWCAP2.
+IREE_CPU_FEATURE_BIT(PPC_64, 0, 0, MMA, "mma")
