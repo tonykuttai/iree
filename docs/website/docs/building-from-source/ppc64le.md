@@ -167,14 +167,29 @@ on ppc64le can be tagged with the `noppc64le` label to exclude them.
   is no checked-in `elementwise_mul_ppc_64.so` fixture in
   `runtime/src/iree/hal/local/elf/testdata/` (every other supported arch has
   one), so the test correctly builds but skips with "no architecture-specific
-  ELF binary embedded." Generating one is blocked by a separate, deeper bug:
+  ELF binary embedded." **This is not a ppc64-specific gap** — it is blocked by
+  a general regression in `testdata/generate.sh`'s fixture-regeneration path
+  that reproduces identically on `x86_64`:
   `iree-compile --compile-mode=hal-executable` fails to lower
-  `testdata/elementwise_mul.mlir` for the `ppc_64` embedded-ELF target with
-  `'iree_codegen.workgroup_count_hint' op failed to resolve workgroup count
-  hint in terms of workload ordinals` — a LLVMCPU codegen/distribution-config
-  issue specific to that direct hal-executable compile mode, not reproduced by
-  the full-pipeline `linalg.matmul` compiles above. Needs investigation before
-  the ELF loader test can be considered validated for ppc64.
+  `testdata/elementwise_mul.mlir` with `'iree_codegen.workgroup_count_hint' op
+  failed to resolve workgroup count hint in terms of workload ordinals`.
+  Root cause: `ResolveWorkgroupCountHintsPass`
+  (`compiler/src/iree/compiler/Codegen/Common/ResolveWorkgroupCountHints.cpp`)
+  resolves the hint by walking the callgraph from a host-side dispatch
+  call-site, but `--compile-mode=hal-executable` compiles a standalone,
+  hand-authored `hal.executable.source` with no such call-site (the file's own
+  header comment notes this: "linking and multi-executable embedding support
+  requires our host-side IR"). The tests that exercise the same op and still
+  pass (`compiler/plugins/target/LLVMCPU/test/smoketest_{embedded,system}.mlir`)
+  go through the full `stream.executable` → HAL pipeline instead, which does
+  have a call-site. The existing checked-in `.so` fixtures for every other arch
+  only still work because they are pre-baked artifacts from an older compiler
+  — `generate.sh` cannot currently regenerate *any* of them against this
+  repository's `HEAD`. Fixing this properly means rewriting
+  `elementwise_mul.mlir` to the `stream.executable` idiom and regenerating
+  fixtures for every supported architecture, which is out of scope here since
+  it touches shared, cross-platform test infrastructure this investigation
+  did not set out to change.
 * **Two runtime unit tests fail on the POWER10 Linux box tested against**,
   root cause not yet determined (could be architecture-specific or particular
   to that machine's kernel/NUMA configuration — not confirmed either way):
