@@ -79,7 +79,10 @@ elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "riscv64")
 elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "riscv32")
   set(IREE_ARCH "riscv_32")
 elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "ppc64le")
-  set(IREE_ARCH "ppc64le")
+  # Kept consistent with the IREE_ARCH_PPC_64 C preprocessor token defined in
+  # target_platform.h, which does not encode endianness in the name (it is
+  # little-endian-only today, gated separately by IREE_ARCH_LITTLE_ENDIAN).
+  set(IREE_ARCH "ppc_64")
 elseif(_IREE_UNNORMALIZED_ARCH_LOWERCASE STREQUAL "")
   set(IREE_ARCH "")
   message(WARNING "Performance advisory: architecture-specific code paths "
@@ -116,6 +119,10 @@ function(iree_arch_to_llvm_arch DST_LLVM_ARCH_VARIABLE SRC_ARCH)
     set(${DST_LLVM_ARCH_VARIABLE} "wasm64" PARENT_SCOPE)
   elseif("${SRC_ARCH}" STREQUAL "wasm_32")
     set(${DST_LLVM_ARCH_VARIABLE} "wasm32" PARENT_SCOPE)
+  elseif("${SRC_ARCH}" STREQUAL "ppc_64")
+    # Little-endian only today (see IREE_ARCH_LITTLE_ENDIAN in
+    # target_platform.h); the big-endian triple component is "powerpc64".
+    set(${DST_LLVM_ARCH_VARIABLE} "powerpc64le" PARENT_SCOPE)
   else()
     message(SEND_ERROR "What is the LLVM name of the architecture that we call ${SRC_ARCH} ?")
     set(${DST_LLVM_ARCH_VARIABLE} "unknown" PARENT_SCOPE)
@@ -137,6 +144,8 @@ function(iree_arch_to_llvm_target DST_LLVM_TARGET_VARIABLE SRC_ARCH)
     set(${DST_LLVM_TARGET_VARIABLE} "RISCV" PARENT_SCOPE)
   elseif("${SRC_ARCH}" MATCHES "^wasm_")
     set(${DST_LLVM_TARGET_VARIABLE} "WebAssembly" PARENT_SCOPE)
+  elseif("${SRC_ARCH}" STREQUAL "ppc_64")
+    set(${DST_LLVM_TARGET_VARIABLE} "PowerPC" PARENT_SCOPE)
   else()
     message(SEND_ERROR "What is the LLVM target handling of the architecture that we call ${SRC_ARCH} ?")
     set(${DST_LLVM_TARGET_VARIABLE} "" PARENT_SCOPE)
@@ -701,6 +710,13 @@ function(iree_compile_flags_for_platform OUT_FLAGS IN_FLAGS)
     # specific CPU flags. Add the llvm flags to support RV32 RVV codegen if
     # llvm-target-triple is not specified.
     list(APPEND _FLAGS ${RISCV32_TEST_DEFAULT_LLVM_FLAGS})
+  elseif(IREE_ARCH STREQUAL "ppc_64" AND
+         CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+         NOT IN_FLAGS MATCHES "iree-llvmcpu-target-triple")
+    # ppc64le Linux crosscompile toolchain can support iree-compile with
+    # specific CPU flags. Add the llvm flags to target ppc64le codegen if
+    # llvm-target-triple is not specified.
+    list(APPEND _FLAGS ${PPC64LE_TEST_DEFAULT_LLVM_FLAGS})
   endif()
 
   if(EMSCRIPTEN AND NOT IN_FLAGS MATCHES "iree-llvmcpu-target-triple")
