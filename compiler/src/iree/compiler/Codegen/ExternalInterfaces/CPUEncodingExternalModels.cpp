@@ -1268,27 +1268,32 @@ static SmallVector<TileMxNxK> enumerateMatmulTilePPC64(TypeRange elementTypes,
 
   // The Power10 MMA (ISA 3.1) facility provides outer-product "GER"
   // accumulators that each compute a 4x4 output tile per instruction. With 8
-  // hardware accumulators (ACC0-ACC7) we tile 8x8 using 4 accumulators to keep
-  // more work in flight and hide instruction latency. The K0 dimension matches
-  // the per-instruction reduction width of each GER variant (f32:1, bf16:2).
+  // hardware accumulators (ACC0-ACC7) we can tile 16x8 using all 8
+  // accumulators, matching OpenBLAS's primary SGEMM tile shape. The
+  // chooseMatmulTile cost model selects the 16x8 tile when M is large enough
+  // (M>=9 due to PowerOf2Ceil rounding) and falls back to 8x8 (4 accumulators)
+  // or narrower for smaller M. The K0 dimension matches the per-instruction
+  // reduction width of each GER variant (f32:1, bf16:2).
   // All of these are gated on the "+mma" feature.
   if (hasFeature(config, "+mma")) {
     // f32*f32->f32 using xvf32gerpp (4x4, K0=1).
     if (lhs.isF32() && rhs.isF32() && out.isF32()) {
       return {
-          TileMxNxK{8, 8, 1}, // Aim to use xvf32gerpp across 4 accumulators.
-          TileMxNxK{4, 8, 1}, // Truncation of the above.
-          TileMxNxK{2, 8, 1}, // Truncation of the above.
-          TileMxNxK{1, 8, 1}, // Truncation of the above.
+          TileMxNxK{16, 8, 1}, // All 8 accumulators; ~1.8x vs 8x8 on P10.
+          TileMxNxK{8, 8, 1},  // 4 accumulators; fallback for narrow M.
+          TileMxNxK{4, 8, 1},  // Truncation of the above.
+          TileMxNxK{2, 8, 1},  // Truncation of the above.
+          TileMxNxK{1, 8, 1},  // Truncation of the above.
       };
     }
     // bf16*bf16->f32 using xvbf16ger2pp (4x4, K0=2).
     if (lhs.isBF16() && rhs.isBF16() && out.isF32()) {
       return {
-          TileMxNxK{8, 8, 2}, // Aim to use xvbf16ger2pp across 4 accumulators.
-          TileMxNxK{4, 8, 2}, // Truncation of the above.
-          TileMxNxK{2, 8, 2}, // Truncation of the above.
-          TileMxNxK{1, 8, 2}, // Truncation of the above.
+          TileMxNxK{16, 8, 2}, // All 8 accumulators; ~1.8x vs 8x8 on P10.
+          TileMxNxK{8, 8, 2},  // 4 accumulators; fallback for narrow M.
+          TileMxNxK{4, 8, 2},  // Truncation of the above.
+          TileMxNxK{2, 8, 2},  // Truncation of the above.
+          TileMxNxK{1, 8, 2},  // Truncation of the above.
       };
     }
     // Note: s8*s8->s32 is intentionally not handled here. The Power10 integer
