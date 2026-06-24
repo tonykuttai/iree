@@ -434,7 +434,29 @@ static void iree_uk_test_mmt4d_for_shape_params(
   // This also relies on honoring IREE_UK_FLAG_MMT4D_SKIP_INTERMEDIATE_ROUNDINGS
   // consistently between actual tile functions (including generic fallback
   // ones) and the reference code in this test.
-  bool fail = memcmp(actual_out_buffer, reference_out_buffer, out_buffer_size);
+  //
+  // For f32, use element-wise == rather than memcmp so that IEEE754 signed-zero
+  // (-0.0 vs +0.0) is treated as equal. The xvf32ger instruction (used to skip
+  // the xxsetaccz zeroing step) can produce -0.0 for products like 0 * (-x),
+  // while the scalar reference always produces +0.0, but they are numerically
+  // identical.
+  bool fail;
+  if (out_type == IREE_UK_TYPE_FLOAT_32) {
+    fail = false;
+    const float* actual = (const float*)actual_out_buffer;
+    const float* ref = (const float*)reference_out_buffer;
+    iree_uk_index_t count =
+        out_buffer_size / (iree_uk_index_t)sizeof(float);
+    for (iree_uk_index_t i = 0; i < count; i++) {
+      if (actual[i] != ref[i]) {
+        fail = true;
+        break;
+      }
+    }
+  } else {
+    fail = (bool)memcmp(actual_out_buffer, reference_out_buffer,
+                        out_buffer_size);
+  }
   if (fail) {
     IREE_UK_TEST_FAIL(test);
   }

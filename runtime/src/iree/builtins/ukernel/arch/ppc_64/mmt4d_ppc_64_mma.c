@@ -62,6 +62,15 @@ static inline void iree_uk_ppc_64_mma_store_f32(__vector_quad* acc, float* base,
 // f32*f32->f32, single 4x4 accumulator (one xvf32gerpp per k). The accumulator
 // IS the 4x4 output tile, disassembled into row-major order matching
 // out_tile[i0*N0+j0] directly -- no transpose needed.
+//
+// When not accumulating into existing output, skip the explicit
+// __builtin_mma_xxsetaccz + redundant first accumulate-into-zero: use the
+// non-accumulating __builtin_mma_xvf32ger directly for k=0 instead, then
+// __builtin_mma_xvf32gerpp for k=1..K-1. Mirrors OpenBLAS's
+// sgemm_kernel_power10.c technique (verified via direct read of that source);
+// confirmed via disassembly that LLVM does not perform this transformation
+// on its own (it requires recognizing two separate C calls -- zero, then
+// accumulate -- as equivalent to one direct-set call).
 void iree_uk_mmt4d_tile_f32f32f32_4x4x1_ppc_64_mma(
     void* IREE_UK_RESTRICT out_tile, const void* IREE_UK_RESTRICT lhs_panel,
     const void* IREE_UK_RESTRICT rhs_panel,
@@ -71,13 +80,20 @@ void iree_uk_mmt4d_tile_f32f32f32_4x4x1_ppc_64_mma(
   float* IREE_UK_RESTRICT out_ptr = out_tile;
 
   __vector_quad acc;
+  iree_uk_index_t k = 0;
   if (params->flags & IREE_UK_FLAG_MMT4D_ACCUMULATE) {
     iree_uk_ppc_64_mma_load_f32(&acc, out_ptr, /*row_stride=*/4);
+  } else if (params->K > 0) {
+    vector float lhs0 = vec_xl(0, lhs_ptr);
+    vector float rhs0 = vec_xl(0, rhs_ptr);
+    __builtin_mma_xvf32ger(&acc, (vector unsigned char)lhs0,
+                           (vector unsigned char)rhs0);
+    k = 1;
   } else {
     __builtin_mma_xxsetaccz(&acc);
   }
 
-  for (iree_uk_index_t k = 0; k < params->K; ++k) {
+  for (; k < params->K; ++k) {
     vector float lhs = vec_xl(0, lhs_ptr + 4 * k);
     vector float rhs = vec_xl(0, rhs_ptr + 4 * k);
     __builtin_mma_xvf32gerpp(&acc, (vector unsigned char)lhs,
@@ -97,15 +113,25 @@ void iree_uk_mmt4d_tile_f32f32f32_4x8x1_ppc_64_mma(
   float* IREE_UK_RESTRICT out_ptr = out_tile;
 
   __vector_quad acc0, acc1;
+  iree_uk_index_t k = 0;
   if (params->flags & IREE_UK_FLAG_MMT4D_ACCUMULATE) {
     iree_uk_ppc_64_mma_load_f32(&acc0, out_ptr + 0, /*row_stride=*/8);
     iree_uk_ppc_64_mma_load_f32(&acc1, out_ptr + 4, /*row_stride=*/8);
+  } else if (params->K > 0) {
+    vector float lhs0 = vec_xl(0, lhs_ptr);
+    vector float rhs_lo0 = vec_xl(0, rhs_ptr + 0);
+    vector float rhs_hi0 = vec_xl(0, rhs_ptr + 4);
+    __builtin_mma_xvf32ger(&acc0, (vector unsigned char)lhs0,
+                           (vector unsigned char)rhs_lo0);
+    __builtin_mma_xvf32ger(&acc1, (vector unsigned char)lhs0,
+                           (vector unsigned char)rhs_hi0);
+    k = 1;
   } else {
     __builtin_mma_xxsetaccz(&acc0);
     __builtin_mma_xxsetaccz(&acc1);
   }
 
-  for (iree_uk_index_t k = 0; k < params->K; ++k) {
+  for (; k < params->K; ++k) {
     vector float lhs = vec_xl(0, lhs_ptr + 4 * k);
     vector float rhs_lo = vec_xl(0, rhs_ptr + 8 * k + 0);
     vector float rhs_hi = vec_xl(0, rhs_ptr + 8 * k + 4);
@@ -131,11 +157,26 @@ void iree_uk_mmt4d_tile_f32f32f32_8x8x1_ppc_64_mma(
   float* IREE_UK_RESTRICT out_ptr = out_tile;
 
   __vector_quad acc00, acc01, acc10, acc11;
+  iree_uk_index_t k = 0;
   if (params->flags & IREE_UK_FLAG_MMT4D_ACCUMULATE) {
     iree_uk_ppc_64_mma_load_f32(&acc00, out_ptr + 0, /*row_stride=*/8);
     iree_uk_ppc_64_mma_load_f32(&acc01, out_ptr + 4, /*row_stride=*/8);
     iree_uk_ppc_64_mma_load_f32(&acc10, out_ptr + 32, /*row_stride=*/8);
     iree_uk_ppc_64_mma_load_f32(&acc11, out_ptr + 36, /*row_stride=*/8);
+  } else if (params->K > 0) {
+    vector float lhs_lo0 = vec_xl(0, lhs_ptr + 0);
+    vector float lhs_hi0 = vec_xl(0, lhs_ptr + 4);
+    vector float rhs_lo0 = vec_xl(0, rhs_ptr + 0);
+    vector float rhs_hi0 = vec_xl(0, rhs_ptr + 4);
+    __builtin_mma_xvf32ger(&acc00, (vector unsigned char)lhs_lo0,
+                           (vector unsigned char)rhs_lo0);
+    __builtin_mma_xvf32ger(&acc01, (vector unsigned char)lhs_lo0,
+                           (vector unsigned char)rhs_hi0);
+    __builtin_mma_xvf32ger(&acc10, (vector unsigned char)lhs_hi0,
+                           (vector unsigned char)rhs_lo0);
+    __builtin_mma_xvf32ger(&acc11, (vector unsigned char)lhs_hi0,
+                           (vector unsigned char)rhs_hi0);
+    k = 1;
   } else {
     __builtin_mma_xxsetaccz(&acc00);
     __builtin_mma_xxsetaccz(&acc01);
@@ -143,7 +184,7 @@ void iree_uk_mmt4d_tile_f32f32f32_8x8x1_ppc_64_mma(
     __builtin_mma_xxsetaccz(&acc11);
   }
 
-  for (iree_uk_index_t k = 0; k < params->K; ++k) {
+  for (; k < params->K; ++k) {
     vector float lhs_lo = vec_xl(0, lhs_ptr + 8 * k + 0);
     vector float lhs_hi = vec_xl(0, lhs_ptr + 8 * k + 4);
     vector float rhs_lo = vec_xl(0, rhs_ptr + 8 * k + 0);
