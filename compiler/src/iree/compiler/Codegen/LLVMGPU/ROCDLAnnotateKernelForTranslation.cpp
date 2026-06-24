@@ -152,7 +152,8 @@ struct ROCDLAnnotateKernelForTranslationPass final
     // Functions without a dispatch_config are library functions or otherwise
     // not kernels, so don't need these annotations.
     LLVM::LLVMFuncOp funcOp = getOperation();
-    IREE::Codegen::DispatchConfigOp configOp = getDispatchConfigOp(funcOp);
+    auto configOp = llvm::dyn_cast_or_null<IREE::Codegen::DispatchConfigOp>(
+        getDispatchConfigOp(funcOp));
     if (!configOp) {
       return;
     }

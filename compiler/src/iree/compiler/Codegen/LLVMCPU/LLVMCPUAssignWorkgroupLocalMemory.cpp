@@ -248,7 +248,8 @@ void LLVMCPUAssignWorkgroupLocalMemoryPass::runOnOperation() {
     return;
   }
 
-  IREE::Codegen::DispatchConfigOp configOp = getDispatchConfigOp(funcOp);
+  auto configOp = llvm::dyn_cast_or_null<IREE::Codegen::DispatchConfigOp>(
+      getDispatchConfigOp(funcOp));
   if (!configOp) {
     localAllocs.front().emitOpError(
         "workgroup local memory allocations require an "

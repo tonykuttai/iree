@@ -160,7 +160,8 @@ struct PropagateDispatchSizeBoundsPass final
     // Check if a specific subgroup size has been explicitly chosen via the
     // codegen pipeline configuration.
     std::optional<int64_t> staticSubgroupSize = getSubgroupSize(funcOp);
-    IREE::Codegen::DispatchConfigOp configOp = getDispatchConfigOp(funcOp);
+    auto configOp = llvm::dyn_cast_or_null<IREE::Codegen::DispatchConfigOp>(
+      getDispatchConfigOp(funcOp));
     if (configOp) {
       if (std::optional<ArrayRef<int64_t>> wgSize =
               configOp.getWorkgroupSize()) {
