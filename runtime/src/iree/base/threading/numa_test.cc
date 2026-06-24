@@ -37,8 +37,11 @@ TEST(NumaTest, OnlineNodesConsistentAcrossCalls) {
 
 TEST(NumaTest, CurrentNodeValid) {
   iree_numa_node_id_t node = iree_numa_node_for_current_thread();
-  EXPECT_LT(node, (iree_numa_node_id_t)iree_numa_node_count());
-  // The current node should be in the online nodes bitmap.
+  // NUMA node IDs are not guaranteed to be contiguous starting at 0 -- e.g.
+  // on a single-node PowerVM LPAR, the one online node can be assigned ID 1
+  // with node_count() == 1, so node < node_count() does not hold in
+  // general. The online-nodes bitmap membership check below is the correct
+  // way to validate a node ID; node_count() is a cardinality, not a bound.
   iree_bitmap_t bitmap = iree_numa_online_nodes();
   EXPECT_TRUE(iree_bitmap_test(bitmap, node));
 }
@@ -119,7 +122,13 @@ TEST(NumaTest, BindMemoryBasic) {
   IREE_ASSERT_OK(iree_numa_alloc(4096, &options, &ptr, &info));
   ASSERT_NE(ptr, nullptr);
 
-  iree_status_t status = iree_numa_bind_memory(ptr, 4096, 0);
+  // Bind to the current thread's node rather than a hardcoded node ID: NUMA
+  // node numbering is not guaranteed to start at 0 (e.g. on a PowerVM LPAR,
+  // a single-node partition can be assigned node ID 1 with no node 0 at
+  // all), so node 0 may not exist and mbind() correctly rejects it with
+  // EINVAL in that case.
+  iree_numa_node_id_t node = iree_numa_node_for_current_thread();
+  iree_status_t status = iree_numa_bind_memory(ptr, 4096, node);
   if (iree_status_code(status) == IREE_STATUS_PERMISSION_DENIED ||
       iree_status_code(status) == IREE_STATUS_UNIMPLEMENTED) {
     iree_status_ignore(status);
