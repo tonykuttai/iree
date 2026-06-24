@@ -97,8 +97,7 @@ static void iree_uk_benchmark_register_mmt4d_impl(
   iree_snprintf(name, sizeof name, "mmt4d_%s_tile_%dx%dx%d%s", type_str, M0, N0,
                 K0, code_path_suffix);
   iree_uk_mmt4d_params_t params = {
-      .flags = flags | IREE_UK_FLAG_MMT4D_SKIP_INTERMEDIATE_ROUNDINGS |
-               IREE_UK_FLAG_MMT4D_ALLOW_GENERIC_FALLBACK_TILE_FUNCTION,
+      .flags = flags | IREE_UK_FLAG_MMT4D_SKIP_INTERMEDIATE_ROUNDINGS,
       .M0 = M0,
       .N0 = N0,
       .K0 = K0};
@@ -106,16 +105,33 @@ static void iree_uk_benchmark_register_mmt4d_impl(
                              sizeof params, cpu_features);
 }
 
+static void iree_uk_benchmark_register_mmt4d_with_options(
+    iree_uk_uint32_t flags, int M0, int N0, int K0, const char* cpu_features,
+    bool allow_generic_fallback, bool register_narrow_m0_variants,
+    const char* code_path_suffix) {
+  iree_uk_uint32_t effective_flags = flags;
+  if (allow_generic_fallback) {
+    effective_flags |= IREE_UK_FLAG_MMT4D_ALLOW_GENERIC_FALLBACK_TILE_FUNCTION;
+  }
+  // Test narrowed, power-of-two values of M0, as mmt4d kernels tend to have
+  // narrow variants for handling these cases.
+  if (register_narrow_m0_variants) {
+    for (int narrowM0 = 1; narrowM0 < M0; narrowM0 *= 2) {
+      iree_uk_benchmark_register_mmt4d_impl(effective_flags, narrowM0, N0, K0,
+                                            cpu_features, code_path_suffix);
+    }
+  }
+  iree_uk_benchmark_register_mmt4d_impl(effective_flags, M0, N0, K0,
+                                        cpu_features, code_path_suffix);
+}
+
 static void iree_uk_benchmark_register_mmt4d(iree_uk_uint32_t flags, int M0,
                                              int N0, int K0,
                                              const char* cpu_features) {
-  // Test narrowed, power-of-two values of M0, as mmt4d kernels tend to have
-  // narrow variants for handling these cases.
-  for (int narrowM0 = 1; narrowM0 < M0; narrowM0 *= 2) {
-    iree_uk_benchmark_register_mmt4d_impl(flags, narrowM0, N0, K0, cpu_features,
-                                          "");
-  }
-  iree_uk_benchmark_register_mmt4d_impl(flags, M0, N0, K0, cpu_features, "");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      flags, M0, N0, K0, cpu_features,
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, /*code_path_suffix=*/"");
 }
 
 int main(int argc, char** argv) {
@@ -199,6 +215,50 @@ int main(int argc, char** argv) {
       IREE_UK_FLAG_MMT4D_SKIP_INTERMEDIATE_ROUNDINGS |
           IREE_UK_FLAG_MMT4D_TYPE_F16F16F16,
       7, 16, 1, "zvfh");
+#elif defined(IREE_ARCH_PPC_64)
+  // Register both variants so P10 runs can report MMA speedups against the
+  // same tile shapes forced through the generic fallback path.
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 4, 1, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 8, 1, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 8, 8, 1, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 4, 8, 2, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 8, 8, 2, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 4, 1, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 8, 1, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 8, 8, 1, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 4, 8, 2, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 8, 8, 2, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
 #else   // defined(IREE_ARCH_ARM_64)
   // Architectures on which we do not have any optimized ukernel code.
   // Benchmark some arbitrary tile shape.
