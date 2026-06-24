@@ -238,6 +238,14 @@ int main(int argc, char** argv) {
       IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 8, 8, 2, "mma",
       /*allow_generic_fallback=*/false,
       /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 16, 8, 1, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 16, 8, 2, "mma",
+      /*allow_generic_fallback=*/false,
+      /*register_narrow_m0_variants=*/false, "_optimized");
 
   iree_uk_benchmark_register_mmt4d_with_options(
       IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 4, 4, 1, "",
@@ -257,6 +265,14 @@ int main(int argc, char** argv) {
       /*register_narrow_m0_variants=*/true, "_generic");
   iree_uk_benchmark_register_mmt4d_with_options(
       IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 8, 8, 2, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_F32F32F32, 16, 8, 1, "",
+      /*allow_generic_fallback=*/true,
+      /*register_narrow_m0_variants=*/true, "_generic");
+  iree_uk_benchmark_register_mmt4d_with_options(
+      IREE_UK_FLAG_MMT4D_TYPE_BF16BF16F32, 16, 8, 2, "",
       /*allow_generic_fallback=*/true,
       /*register_narrow_m0_variants=*/true, "_generic");
 #else   // defined(IREE_ARCH_ARM_64)

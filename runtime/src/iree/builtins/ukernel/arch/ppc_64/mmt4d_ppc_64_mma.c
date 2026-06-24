@@ -205,6 +205,102 @@ void iree_uk_mmt4d_tile_f32f32f32_8x8x1_ppc_64_mma(
   iree_uk_ppc_64_mma_store_f32(&acc11, out_ptr + 36, /*row_stride=*/8);
 }
 
+// f32*f32->f32, 16x8 tile using all 8 accumulators — matching OpenBLAS's
+// sgemm_kernel_power10.c primary tile (SGEMM_DEFAULT_UNROLL_M=16,
+// SGEMM_DEFAULT_UNROLL_N=8). Accumulator layout (each block is 4x4):
+//   acc00: rows[0:3]   x cols[0:3]    acc01: rows[0:3]   x cols[4:7]
+//   acc10: rows[4:7]   x cols[0:3]    acc11: rows[4:7]   x cols[4:7]
+//   acc20: rows[8:11]  x cols[0:3]    acc21: rows[8:11]  x cols[4:7]
+//   acc30: rows[12:15] x cols[0:3]    acc31: rows[12:15] x cols[4:7]
+void iree_uk_mmt4d_tile_f32f32f32_16x8x1_ppc_64_mma(
+    void* IREE_UK_RESTRICT out_tile, const void* IREE_UK_RESTRICT lhs_panel,
+    const void* IREE_UK_RESTRICT rhs_panel,
+    const iree_uk_mmt4d_params_t* params) {
+  const float* IREE_UK_RESTRICT lhs_ptr = lhs_panel;
+  const float* IREE_UK_RESTRICT rhs_ptr = rhs_panel;
+  float* IREE_UK_RESTRICT out_ptr = out_tile;
+
+  __vector_quad acc00, acc01, acc10, acc11, acc20, acc21, acc30, acc31;
+  iree_uk_index_t k = 0;
+  if (params->flags & IREE_UK_FLAG_MMT4D_ACCUMULATE) {
+    iree_uk_ppc_64_mma_load_f32(&acc00, out_ptr + 0,   /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc01, out_ptr + 4,   /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc10, out_ptr + 32,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc11, out_ptr + 36,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc20, out_ptr + 64,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc21, out_ptr + 68,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc30, out_ptr + 96,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc31, out_ptr + 100, /*row_stride=*/8);
+  } else if (params->K > 0) {
+    vector float lhs0 = vec_xl(0, lhs_ptr + 0);
+    vector float lhs1 = vec_xl(0, lhs_ptr + 4);
+    vector float lhs2 = vec_xl(0, lhs_ptr + 8);
+    vector float lhs3 = vec_xl(0, lhs_ptr + 12);
+    vector float rhs0 = vec_xl(0, rhs_ptr + 0);
+    vector float rhs1 = vec_xl(0, rhs_ptr + 4);
+    __builtin_mma_xvf32ger(&acc00, (vector unsigned char)lhs0,
+                           (vector unsigned char)rhs0);
+    __builtin_mma_xvf32ger(&acc01, (vector unsigned char)lhs0,
+                           (vector unsigned char)rhs1);
+    __builtin_mma_xvf32ger(&acc10, (vector unsigned char)lhs1,
+                           (vector unsigned char)rhs0);
+    __builtin_mma_xvf32ger(&acc11, (vector unsigned char)lhs1,
+                           (vector unsigned char)rhs1);
+    __builtin_mma_xvf32ger(&acc20, (vector unsigned char)lhs2,
+                           (vector unsigned char)rhs0);
+    __builtin_mma_xvf32ger(&acc21, (vector unsigned char)lhs2,
+                           (vector unsigned char)rhs1);
+    __builtin_mma_xvf32ger(&acc30, (vector unsigned char)lhs3,
+                           (vector unsigned char)rhs0);
+    __builtin_mma_xvf32ger(&acc31, (vector unsigned char)lhs3,
+                           (vector unsigned char)rhs1);
+    k = 1;
+  } else {
+    __builtin_mma_xxsetaccz(&acc00);
+    __builtin_mma_xxsetaccz(&acc01);
+    __builtin_mma_xxsetaccz(&acc10);
+    __builtin_mma_xxsetaccz(&acc11);
+    __builtin_mma_xxsetaccz(&acc20);
+    __builtin_mma_xxsetaccz(&acc21);
+    __builtin_mma_xxsetaccz(&acc30);
+    __builtin_mma_xxsetaccz(&acc31);
+  }
+
+  for (; k < params->K; ++k) {
+    vector float lhs0 = vec_xl(0, lhs_ptr + 16 * k + 0);
+    vector float lhs1 = vec_xl(0, lhs_ptr + 16 * k + 4);
+    vector float lhs2 = vec_xl(0, lhs_ptr + 16 * k + 8);
+    vector float lhs3 = vec_xl(0, lhs_ptr + 16 * k + 12);
+    vector float rhs0 = vec_xl(0, rhs_ptr + 8 * k + 0);
+    vector float rhs1 = vec_xl(0, rhs_ptr + 8 * k + 4);
+    __builtin_mma_xvf32gerpp(&acc00, (vector unsigned char)lhs0,
+                             (vector unsigned char)rhs0);
+    __builtin_mma_xvf32gerpp(&acc01, (vector unsigned char)lhs0,
+                             (vector unsigned char)rhs1);
+    __builtin_mma_xvf32gerpp(&acc10, (vector unsigned char)lhs1,
+                             (vector unsigned char)rhs0);
+    __builtin_mma_xvf32gerpp(&acc11, (vector unsigned char)lhs1,
+                             (vector unsigned char)rhs1);
+    __builtin_mma_xvf32gerpp(&acc20, (vector unsigned char)lhs2,
+                             (vector unsigned char)rhs0);
+    __builtin_mma_xvf32gerpp(&acc21, (vector unsigned char)lhs2,
+                             (vector unsigned char)rhs1);
+    __builtin_mma_xvf32gerpp(&acc30, (vector unsigned char)lhs3,
+                             (vector unsigned char)rhs0);
+    __builtin_mma_xvf32gerpp(&acc31, (vector unsigned char)lhs3,
+                             (vector unsigned char)rhs1);
+  }
+
+  iree_uk_ppc_64_mma_store_f32(&acc00, out_ptr + 0,   /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc01, out_ptr + 4,   /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc10, out_ptr + 32,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc11, out_ptr + 36,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc20, out_ptr + 64,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc21, out_ptr + 68,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc30, out_ptr + 96,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc31, out_ptr + 100, /*row_stride=*/8);
+}
+
 // bf16*bf16->f32. The accumulator holds f32 values, so the output load/store
 // path is identical to f32; only the GER instruction and input panel stride
 // differ. xvbf16ger2pp consumes, per call, one VSR of 8 bf16 from each operand
@@ -281,4 +377,65 @@ void iree_uk_mmt4d_tile_bf16bf16f32_8x8x2_ppc_64_mma(
   iree_uk_ppc_64_mma_store_f32(&acc01, out_ptr + 4, /*row_stride=*/8);
   iree_uk_ppc_64_mma_store_f32(&acc10, out_ptr + 32, /*row_stride=*/8);
   iree_uk_ppc_64_mma_store_f32(&acc11, out_ptr + 36, /*row_stride=*/8);
+}
+
+// bf16*bf16->f32, 16x8 tile using all 8 accumulators — matching OpenBLAS's
+// sbgemm_kernel_power10.c primary tile (SBGEMM_DEFAULT_UNROLL_M=16,
+// SBGEMM_DEFAULT_UNROLL_N=8). Same accumulator layout as f32 16x8x1.
+// LHS panel stride per k-step: M0*K0*sizeof(bf16) = 16*2*2 = 64 bytes.
+// RHS panel stride per k-step: N0*K0*sizeof(bf16) = 8*2*2 = 32 bytes.
+void iree_uk_mmt4d_tile_bf16bf16f32_16x8x2_ppc_64_mma(
+    void* IREE_UK_RESTRICT out_tile, const void* IREE_UK_RESTRICT lhs_panel,
+    const void* IREE_UK_RESTRICT rhs_panel,
+    const iree_uk_mmt4d_params_t* params) {
+  const unsigned char* IREE_UK_RESTRICT lhs_ptr = lhs_panel;
+  const unsigned char* IREE_UK_RESTRICT rhs_ptr = rhs_panel;
+  float* IREE_UK_RESTRICT out_ptr = out_tile;
+
+  __vector_quad acc00, acc01, acc10, acc11, acc20, acc21, acc30, acc31;
+  if (params->flags & IREE_UK_FLAG_MMT4D_ACCUMULATE) {
+    iree_uk_ppc_64_mma_load_f32(&acc00, out_ptr + 0,   /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc01, out_ptr + 4,   /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc10, out_ptr + 32,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc11, out_ptr + 36,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc20, out_ptr + 64,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc21, out_ptr + 68,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc30, out_ptr + 96,  /*row_stride=*/8);
+    iree_uk_ppc_64_mma_load_f32(&acc31, out_ptr + 100, /*row_stride=*/8);
+  } else {
+    __builtin_mma_xxsetaccz(&acc00);
+    __builtin_mma_xxsetaccz(&acc01);
+    __builtin_mma_xxsetaccz(&acc10);
+    __builtin_mma_xxsetaccz(&acc11);
+    __builtin_mma_xxsetaccz(&acc20);
+    __builtin_mma_xxsetaccz(&acc21);
+    __builtin_mma_xxsetaccz(&acc30);
+    __builtin_mma_xxsetaccz(&acc31);
+  }
+
+  for (iree_uk_index_t k = 0; k < params->K; ++k) {
+    vector unsigned char lhs0 = vec_xl(0, lhs_ptr + k * (16 * 2 * 2) + 0);
+    vector unsigned char lhs1 = vec_xl(0, lhs_ptr + k * (16 * 2 * 2) + 16);
+    vector unsigned char lhs2 = vec_xl(0, lhs_ptr + k * (16 * 2 * 2) + 32);
+    vector unsigned char lhs3 = vec_xl(0, lhs_ptr + k * (16 * 2 * 2) + 48);
+    vector unsigned char rhs0 = vec_xl(0, rhs_ptr + k * (8 * 2 * 2) + 0);
+    vector unsigned char rhs1 = vec_xl(0, rhs_ptr + k * (8 * 2 * 2) + 16);
+    __builtin_mma_xvbf16ger2pp(&acc00, lhs0, rhs0);
+    __builtin_mma_xvbf16ger2pp(&acc01, lhs0, rhs1);
+    __builtin_mma_xvbf16ger2pp(&acc10, lhs1, rhs0);
+    __builtin_mma_xvbf16ger2pp(&acc11, lhs1, rhs1);
+    __builtin_mma_xvbf16ger2pp(&acc20, lhs2, rhs0);
+    __builtin_mma_xvbf16ger2pp(&acc21, lhs2, rhs1);
+    __builtin_mma_xvbf16ger2pp(&acc30, lhs3, rhs0);
+    __builtin_mma_xvbf16ger2pp(&acc31, lhs3, rhs1);
+  }
+
+  iree_uk_ppc_64_mma_store_f32(&acc00, out_ptr + 0,   /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc01, out_ptr + 4,   /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc10, out_ptr + 32,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc11, out_ptr + 36,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc20, out_ptr + 64,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc21, out_ptr + 68,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc30, out_ptr + 96,  /*row_stride=*/8);
+  iree_uk_ppc_64_mma_store_f32(&acc31, out_ptr + 100, /*row_stride=*/8);
 }

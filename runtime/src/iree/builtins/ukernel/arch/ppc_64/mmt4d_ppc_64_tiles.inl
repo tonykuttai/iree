@@ -18,6 +18,8 @@
 IREE_UK_MMT4D_TILE(ppc_64, f32, f32, f32, 4, 4, 1, _mma)
 IREE_UK_MMT4D_TILE(ppc_64, f32, f32, f32, 4, 8, 1, _mma)
 IREE_UK_MMT4D_TILE(ppc_64, f32, f32, f32, 8, 8, 1, _mma)
+IREE_UK_MMT4D_TILE(ppc_64, f32, f32, f32, 16, 8, 1, _mma)
 // bf16*bf16->f32 uses xvbf16ger2pp (K0=2).
 IREE_UK_MMT4D_TILE(ppc_64, bf16, bf16, f32, 4, 8, 2, _mma)
 IREE_UK_MMT4D_TILE(ppc_64, bf16, bf16, f32, 8, 8, 2, _mma)
+IREE_UK_MMT4D_TILE(ppc_64, bf16, bf16, f32, 16, 8, 2, _mma)

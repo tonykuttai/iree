@@ -12,8 +12,8 @@ iree_uk_query_matmul_tile_sizes_ppc_64_f32f32f32(
     const iree_uk_query_tile_sizes_2d_params_t* params) {
 #if defined(IREE_UK_BUILD_PPC_64_MMA)
   if (iree_uk_cpu_ppc_64_mma(params->cpu_data)) {
-    // 8x8 macro-tile built from 4 MMA accumulators (xvf32gerpp, K0=1).
-    return (iree_uk_matmul_tile_sizes_t){.M = 8, .K = 1, .N = 8};
+    // 16x8 macro-tile built from 8 MMA accumulators (xvf32gerpp, K0=1).
+    return (iree_uk_matmul_tile_sizes_t){.M = 16, .K = 1, .N = 8};
   }
 #endif
   // generic fallback
@@ -25,8 +25,8 @@ iree_uk_query_matmul_tile_sizes_ppc_64_bf16bf16f32(
     const iree_uk_query_tile_sizes_2d_params_t* params) {
 #if defined(IREE_UK_BUILD_PPC_64_MMA)
   if (iree_uk_cpu_ppc_64_mma(params->cpu_data)) {
-    // 8x8 macro-tile built from 4 MMA accumulators (xvbf16ger2pp, K0=2).
-    return (iree_uk_matmul_tile_sizes_t){.M = 8, .K = 2, .N = 8};
+    // 16x8 macro-tile built from 8 MMA accumulators (xvbf16ger2pp, K0=2).
+    return (iree_uk_matmul_tile_sizes_t){.M = 16, .K = 2, .N = 8};
   }
 #endif
   // generic fallback
