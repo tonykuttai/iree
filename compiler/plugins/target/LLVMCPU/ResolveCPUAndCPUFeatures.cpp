@@ -12,6 +12,7 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/TargetParser/AArch64TargetParser.h"
 #include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/PPCTargetParser.h"
 #include "llvm/TargetParser/RISCVTargetParser.h"
 #include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/TargetParser/Triple.h"
@@ -112,11 +113,33 @@ resolveCPUFeaturesForCPU(const llvm::Triple &triple, std::string &cpu,
       targetCpuFeatures.AddFeature(feature);
     }
   } else if (triple.isPPC64()) {
-    // For PowerPC, we accept the CPU name and let LLVM handle feature resolution.
-    // Common PowerPC CPUs: pwr7, pwr8, pwr9, pwr10, etc.
-    // For now, we don't validate the CPU name and let LLVM's target machine
-    // creation handle it. If needed, validation can be added later.
-    // PowerPC features are typically handled by the CPU selection itself.
+    // PowerPC CPU names have aliases (e.g. "power10" == "pwr10"); normalize
+    // before validating / looking up features.
+    std::string normalizedCpu = llvm::PPC::normalizeCPUName(cpu).str();
+    if (!llvm::PPC::isValidCPU(normalizedCpu)) {
+      return ResolveCPUAndCPUFeaturesStatus::UnknownCPU;
+    }
+    // Expand the CPU name to its default LLVM subtarget features (e.g. pwr10
+    // implies +mma, +vsx, +power10-vector, ...). This mirrors the X86 / RISCV
+    // / AArch64 branches above and lets downstream compiler-side feature checks
+    // such as hasFeature(config, "+mma") see what the CPU provides.
+    std::optional<llvm::StringMap<bool>> features =
+        llvm::PPC::getPPCDefaultTargetFeatures(triple, normalizedCpu);
+    if (features) {
+      // Collect the enabled features and sort for a deterministic string.
+      llvm::SmallVector<llvm::StringRef> enabledFeatures;
+      for (const auto &entry : *features) {
+        if (entry.getValue()) {
+          enabledFeatures.push_back(entry.getKey());
+        }
+      }
+      llvm::sort(enabledFeatures);
+      for (llvm::StringRef feature : enabledFeatures) {
+        targetCpuFeatures.AddFeature(feature);
+      }
+    }
+    // Use the normalized CPU name so the backend sees a canonical value.
+    cpu = std::move(normalizedCpu);
   } else {
     return ResolveCPUAndCPUFeaturesStatus::UnimplementedMapping;
   }
@@ -214,6 +237,13 @@ std::string getUnknownCPUMessage(std::string_view triple_str) {
     msg += "List of accepted CPUs: ";
     llvm::SmallVector<llvm::StringRef> allAcceptedCpus;
     llvm::AArch64::fillValidCPUArchList(allAcceptedCpus);
+    llvm::raw_string_ostream s(msg);
+    llvm::interleaveComma(allAcceptedCpus, s);
+    msg += "\n";
+  } else if (triple.isPPC64()) {
+    msg += "List of accepted CPUs: ";
+    llvm::SmallVector<llvm::StringRef> allAcceptedCpus;
+    llvm::PPC::fillValidCPUList(allAcceptedCpus);
     llvm::raw_string_ostream s(msg);
     llvm::interleaveComma(allAcceptedCpus, s);
     msg += "\n";

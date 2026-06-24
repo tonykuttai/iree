@@ -76,18 +76,18 @@ getEntryPoint(mlir::FunctionOpInterface funcOp) {
   return std::nullopt;
 }
 
-IREE::Codegen::DispatchConfigOp
+mlir::Operation *
 getDispatchConfigOp(mlir::FunctionOpInterface funcOp) {
   auto moduleOp = funcOp->getParentOfType<ModuleOp>();
   if (!moduleOp) {
-    return {};
+    return nullptr;
   }
   for (auto configOp : moduleOp.getOps<IREE::Codegen::DispatchConfigOp>()) {
     if (configOp.getFunctionRef() == funcOp.getName()) {
-      return configOp;
+      return configOp.getOperation();
     }
   }
-  return {};
+  return nullptr;
 }
 
 bool isEntryPoint(mlir::FunctionOpInterface func) {
@@ -325,6 +325,11 @@ bool isRISCV32(DictionaryAttr targetConfig) {
 bool isRISCV64(DictionaryAttr targetConfig) {
   std::optional<llvm::Triple> triple = getTargetTriple(targetConfig);
   return triple && triple.value().isRISCV64();
+}
+
+bool isPPC64(DictionaryAttr targetConfig) {
+  std::optional<llvm::Triple> triple = getTargetTriple(targetConfig);
+  return triple && triple.value().isPPC64();
 }
 
 std::array<int64_t, 3> getMaxWorkgroupCount(DictionaryAttr targetConfig) {

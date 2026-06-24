@@ -1256,6 +1256,52 @@ static SmallVector<TileMxNxK> enumerateMatmulTileX86_64(TypeRange elementTypes,
   return {};
 }
 
+// Enumerate tile sizes to choose from on PowerPC (ppc64le).
+// For narrow-{M,N} cases, this only enumerates on narrow M. The narrow-N cases
+// are handled by transposition in chooseMatmulTile.
+static SmallVector<TileMxNxK> enumerateMatmulTilePPC64(TypeRange elementTypes,
+                                                       DictionaryAttr config) {
+  assert(elementTypes.size() == 3);
+  Type lhs = elementTypes[0];
+  Type rhs = elementTypes[1];
+  Type out = elementTypes[2];
+
+  // The Power10 MMA (ISA 3.1) facility provides outer-product "GER"
+  // accumulators that each compute a 4x4 output tile per instruction. With 8
+  // hardware accumulators (ACC0-ACC7) we tile 8x8 using 4 accumulators to keep
+  // more work in flight and hide instruction latency. The K0 dimension matches
+  // the per-instruction reduction width of each GER variant (f32:1, bf16:2).
+  // All of these are gated on the "+mma" feature.
+  if (hasFeature(config, "+mma")) {
+    // f32*f32->f32 using xvf32gerpp (4x4, K0=1).
+    if (lhs.isF32() && rhs.isF32() && out.isF32()) {
+      return {
+          TileMxNxK{8, 8, 1}, // Aim to use xvf32gerpp across 4 accumulators.
+          TileMxNxK{4, 8, 1}, // Truncation of the above.
+          TileMxNxK{2, 8, 1}, // Truncation of the above.
+          TileMxNxK{1, 8, 1}, // Truncation of the above.
+      };
+    }
+    // bf16*bf16->f32 using xvbf16ger2pp (4x4, K0=2).
+    if (lhs.isBF16() && rhs.isBF16() && out.isF32()) {
+      return {
+          TileMxNxK{8, 8, 2}, // Aim to use xvbf16ger2pp across 4 accumulators.
+          TileMxNxK{4, 8, 2}, // Truncation of the above.
+          TileMxNxK{2, 8, 2}, // Truncation of the above.
+          TileMxNxK{1, 8, 2}, // Truncation of the above.
+      };
+    }
+    // Note: s8*s8->s32 is intentionally not handled here. The Power10 integer
+    // GER instruction (xvi8ger4) computes an unsigned*signed product (the LHS
+    // operand is treated as unsigned), so it cannot directly implement the
+    // signed*signed mmt4d s8s8s32 contraction without a bias correction. This
+    // mirrors the x86 path, which avoids VPDPBUSD for the same reason.
+  }
+
+  // Fallback - no architecture-optimized tile size for this case.
+  return {};
+}
+
 static SmallVector<TileMxNxK>
 enumerateCPUMatmulTiles(IREE::Encoding::EncodingAttr encoding,
                         DictionaryAttr config) {
@@ -1272,6 +1318,9 @@ enumerateCPUMatmulTiles(IREE::Encoding::EncodingAttr encoding,
   }
   if (isRISCV64(config)) {
     return enumerateMatmulTileRiscv64(elementTypes, config);
+  }
+  if (isPPC64(config)) {
+    return enumerateMatmulTilePPC64(elementTypes, config);
   }
   return {};
 }

@@ -48,7 +48,7 @@ getEntryPoint(mlir::FunctionOpInterface funcOp);
 
 /// Returns the dispatch_config op for the `funcOp` by looking up the parent
 /// module for a matching function_ref. Returns nullptr if not found.
-IREE::Codegen::DispatchConfigOp
+mlir::Operation *
 getDispatchConfigOp(mlir::FunctionOpInterface funcOp);
 
 /// Methods to retrieve information association with `configuration` field
@@ -111,6 +111,7 @@ bool isAArch64(DictionaryAttr targetConfig);
 bool isRISCV(DictionaryAttr targetConfig);
 bool isRISCV32(DictionaryAttr targetConfig);
 bool isRISCV64(DictionaryAttr targetConfig);
+bool isPPC64(DictionaryAttr targetConfig);
 
 /// Get maximum workgroup count in [x, y, z] for target attribute if it is
 /// available. Returns ShapedType::kDynamic if it is unknown.
