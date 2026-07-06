@@ -74,6 +74,15 @@ static llvm::cl::list<mlir::iree_compiler::IREE::Encoding::EncodingOpType>
              mlir::iree_compiler::IREE::Encoding::EncodingOpType::
                  scaled_matmul}));
 
+static llvm::cl::opt<int64_t> clDataTilingMNKThreshold(
+    "iree-dispatch-creation-data-tiling-mnk-threshold",
+    llvm::cl::desc(
+        "Profitability gate for data-tiling contraction ops: skip data-tiling "
+        "annotation when the statically-known M*N*K iteration volume "
+        "(excluding batch dimensions) is below this threshold. 0 (default) "
+        "disables the gate. Ops with dynamic M/N/K are never gated."),
+    llvm::cl::init(0));
+
 //===----------------------------------------------------------------------===//
 // Utilities
 //===----------------------------------------------------------------------===//
@@ -286,6 +295,7 @@ static void addDispatchRegionCreationPasses(OpPassManager &passManager,
             passOpts.opTypes.assign(clDataTilingOps.begin(),
                                     clDataTilingOps.end());
           }
+          passOpts.dataTilingMNKThreshold = clDataTilingMNKThreshold;
           return createAnnotateDataTilingHintsPass(passOpts);
         })
         // Set encodings on all eligible ops. All ops should be in compiler

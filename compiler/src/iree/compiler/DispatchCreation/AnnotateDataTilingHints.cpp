@@ -4,6 +4,8 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#include <optional>
+
 #include "iree/compiler/Codegen/Dialect/Codegen/IR/IREECodegenAttrs.h"
 #include "iree/compiler/Dialect/Encoding/IR/EncodingTypes.h"
 #include "iree/compiler/Dialect/Encoding/Utils/Utils.h"
@@ -140,6 +142,48 @@ static bool isSupportedContractionOp(linalg::LinalgOp linalgOp) {
   return true;
 }
 
+/// Returns the statically-known M*N*K iteration volume of a contraction op, or
+/// std::nullopt if any of the M, N, or K dimensions is dynamic. The batch
+/// dimension is intentionally excluded: both pack/unpack cost and compute scale
+/// with batch, so it is the per-contraction M*N*K volume that determines
+/// whether data-tiling amortizes its overhead (matching OpenBLAS's
+/// MNK-volume-based small-matmul permit, which has no batch concept).
+static std::optional<int64_t>
+getStaticContractionVolume(linalg::LinalgOp linalgOp) {
+  FailureOr<linalg::ContractionDimensions> cDims =
+      linalg::inferContractionDims(linalgOp);
+  if (failed(cDims)) {
+    return std::nullopt;
+  }
+  SmallVector<int64_t> loopRanges = linalgOp.getStaticLoopRanges();
+  int64_t volume = 1;
+  for (ArrayRef<unsigned> dims :
+       {ArrayRef<unsigned>(cDims->m), ArrayRef<unsigned>(cDims->n),
+        ArrayRef<unsigned>(cDims->k)}) {
+    for (unsigned dim : dims) {
+      if (ShapedType::isDynamic(loopRanges[dim])) {
+        return std::nullopt;
+      }
+      volume *= loopRanges[dim];
+    }
+  }
+  return volume;
+}
+
+/// Profitability gate for data-tiling a contraction op. Returns true if the op
+/// should be EXCLUDED from data-tiling because its statically-known M*N*K volume
+/// is below `threshold`. A non-positive `threshold` disables the gate. Ops with
+/// any dynamic M/N/K dimension are never excluded: the volume cannot be
+/// evaluated, so the existing (un-gated) data-tiling behavior is preserved.
+static bool isBelowDataTilingThreshold(linalg::LinalgOp linalgOp,
+                                       int64_t threshold) {
+  if (threshold <= 0) {
+    return false;
+  }
+  std::optional<int64_t> volume = getStaticContractionVolume(linalgOp);
+  return volume.has_value() && *volume < threshold;
+}
+
 static bool isSupportedConvolutionOp(linalg::LinalgOp linalgOp) {
   if (!dataTilablePreCondition(linalgOp)) {
     return false;
@@ -216,7 +260,15 @@ void AnnotateDataTilingHintsPass::runOnOperation() {
     if (!linalgOp) {
       return WalkResult::advance();
     }
-    if ((enableMatmul && isSupportedContractionOp(linalgOp)) ||
+    bool isMatmul = enableMatmul && isSupportedContractionOp(linalgOp);
+    // Profitability gate: skip data-tiling for contraction ops whose static
+    // M*N*K volume is below the threshold (default-off). They stay generic ops
+    // and avoid pack/unpack overhead that would exceed the kernel gain.
+    if (isMatmul &&
+        isBelowDataTilingThreshold(linalgOp, dataTilingMNKThreshold)) {
+      return WalkResult::advance();
+    }
+    if (isMatmul ||
         (enableScaledMatmul && isSupportedScaledContractionOp(linalgOp)) ||
         (enableConvolution && isSupportedConvolutionOp(linalgOp))) {
       candidates.push_back(op);

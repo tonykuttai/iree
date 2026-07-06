@@ -422,6 +422,16 @@ def AnnotateDataTilingHintsPass :
             mlir::iree_compiler::IREE::Encoding::EncodingOpType>(
             {mlir::iree_compiler::IREE::Encoding::EncodingOpType::matmul,
              mlir::iree_compiler::IREE::Encoding::EncodingOpType::scaled_matmul})}]>,
+    Option<
+        "dataTilingMNKThreshold", "data-tiling-mnk-threshold", "int64_t",
+        /*default=*/"0",
+        "Profitability gate for data-tiling contraction (matmul) ops. When set "
+        "to a positive value, a contraction op whose statically-known M*N*K "
+        "iteration volume (excluding any batch dimension) is below this "
+        "threshold is not annotated for data-tiling, so it stays a generic op "
+        "and avoids the pack/unpack overhead that exceeds the kernel gain for "
+        "small problems. 0 (the default) disables the gate, preserving existing "
+        "behavior. Ops with a dynamic M, N, or K dimension are never gated.">,
   ];
 }
 
