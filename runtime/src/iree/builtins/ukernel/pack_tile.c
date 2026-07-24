@@ -14,16 +14,17 @@ static void iree_uk_pack_tile_generic_direct(
     iree_uk_index_t tile_size1) {
   const char* IREE_UK_RESTRICT in_ptr_l1 = in_tile_ptr;
   char* IREE_UK_RESTRICT out_ptr_l1 = out_tile_ptr;
+  iree_uk_index_t tile_row_bytes = tile_size1 * elem_size;
   for (iree_uk_index_t outer_i1 = 0; outer_i1 < outer_size1; ++outer_i1) {
     const char* IREE_UK_RESTRICT in_ptr = in_ptr_l1;
     char* IREE_UK_RESTRICT out_ptr = out_ptr_l1;
     for (iree_uk_index_t tile_i0 = 0; tile_i0 < tile_size0; ++tile_i0) {
-      iree_uk_memcpy(out_ptr, in_ptr, tile_size1 * elem_size);
-      out_ptr += tile_size1 * elem_size;
+      iree_uk_memcpy_small(out_ptr, in_ptr, tile_row_bytes);
+      out_ptr += tile_row_bytes;
       in_ptr += in_stride0 * elem_size;
     }
     out_ptr_l1 += out_stride1 * elem_size;
-    in_ptr_l1 += tile_size1 * elem_size;
+    in_ptr_l1 += tile_row_bytes;
   }
 }
 
@@ -42,7 +43,7 @@ static void iree_uk_pack_tile_generic_transpose(
       const char* IREE_UK_RESTRICT in_ptr = in_ptr_l2;
       char* IREE_UK_RESTRICT out_ptr = out_ptr_l2;
       for (iree_uk_index_t tile_i1 = 0; tile_i1 < tile_size1; ++tile_i1) {
-        iree_uk_memcpy(out_ptr, in_ptr, elem_size);
+        iree_uk_memcpy_small(out_ptr, in_ptr, elem_size);
         out_ptr += tile_size0 * elem_size;
         in_ptr += elem_size;
       }

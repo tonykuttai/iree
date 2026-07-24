@@ -563,6 +563,43 @@ static inline void iree_uk_memset(void* buf, int val, iree_uk_index_t n) {
   for (iree_uk_index_t i = 0; i < n; ++i) ((char*)buf)[i] = val;
 }
 
+// Like iree_uk_memcpy, but with fast paths for the small power-of-two sizes
+// that cover all element and tile-row sizes used by pack/unpack. The
+// constant-size __builtin_memcpy calls compile to a few (possibly unaligned)
+// wide loads/stores instead of a byte-granular loop. This matters when `size`
+// is not a compile-time constant at the call site, e.g. when reached through
+// a tile_func pointer that the compiler cannot devirtualize: iree_uk_memcpy
+// then degrades to a byte-at-a-time copy loop.
+static inline void iree_uk_memcpy_small(void* IREE_UK_RESTRICT dst,
+                                        const void* IREE_UK_RESTRICT src,
+                                        iree_uk_index_t size) {
+  switch (size) {
+    case 1:
+      __builtin_memcpy(dst, src, 1);
+      return;
+    case 2:
+      __builtin_memcpy(dst, src, 2);
+      return;
+    case 4:
+      __builtin_memcpy(dst, src, 4);
+      return;
+    case 8:
+      __builtin_memcpy(dst, src, 8);
+      return;
+    case 16:
+      __builtin_memcpy(dst, src, 16);
+      return;
+    case 32:
+      __builtin_memcpy(dst, src, 32);
+      return;
+    case 64:
+      __builtin_memcpy(dst, src, 64);
+      return;
+    default:
+      iree_uk_memcpy(dst, src, size);
+  }
+}
+
 //===----------------------------------------------------------------------===//
 // Count leading zeros (extracted from base/internal/math.h and adapted
 // to be able to be used standalone).
